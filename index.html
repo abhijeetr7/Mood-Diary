@@ -1,0 +1,1479 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>📔 Mood Diary</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chart.js CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Google Fonts - Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        /* Custom styles for mood colors and general aesthetics */
+        :root {
+            --color-happy: #84cc16; /* green-500 */
+            --color-content: #22c55e; /* green-600 */
+            --color-neutral: #9ca3af; /* gray-400 */
+            --color-sad: #ef4444; /* red-500 */
+            --color-angry: #dc2626; /* red-600 */
+            --color-overwhelmed: #f97316; /* orange-500 */
+            --color-default-bg: #e5e7eb; /* gray-200 */
+            --color-text-dark: #1f2937; /* gray-900 */
+            --color-text-light: #f9fafb; /* gray-50 */
+            --color-card-light: #ffffff; /* white */
+            --color-card-dark: #1f2937; /* gray-900 */
+            --color-border-light: #d1d5db; /* gray-300 */
+            --color-border-dark: #4b5563; /* gray-600 */
+            --color-primary-light: #3b82f6; /* blue-500 */
+            --color-primary-dark: #60a5fa; /* blue-400 */
+        }
+
+        html, body {
+            height: 100%; /* Ensure html and body take full height for proper modal positioning */
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            transition: background-color 0.3s ease, color 0.3s ease;
+            background-color: var(--color-default-bg);
+            color: var(--color-text-dark);
+            min-height: 100vh;
+            display: flex; /* Make body a flex container */
+            flex-direction: column; /* Stack content vertically */
+        }
+
+        body.dark-mode {
+            background-color: #1f2937; /* gray-900 */
+            color: var(--color-text-light);
+        }
+
+        .dark-mode .bg-white {
+            background-color: var(--color-card-dark);
+        }
+
+        .dark-mode .text-gray-900 {
+            color: var(--color-text-light);
+        }
+
+        .dark-mode .border-gray-300 {
+            border-color: var(--color-border-dark);
+        }
+
+        .dark-mode .hover\\:bg-gray-100:hover {
+            background-color: #374151; /* gray-700 */
+        }
+
+        .dark-mode .focus\\:ring-blue-500:focus {
+            --tw-ring-color: var(--color-primary-dark);
+        }
+
+        .dark-mode .bg-gray-200 {
+            background-color: #374151; /* gray-700 !important; */ /* Added !important for stronger override */
+        }
+        .dark-mode .bg-gray-50 {
+            background-color: #374151; /* gray-700 */
+        }
+
+
+        .dark-mode .text-gray-500 {
+            color: #d1d5db; /* gray-300 */
+        }
+
+        .dark-mode .placeholder-gray-400::placeholder {
+            color: #9ca3af; /* gray-400 */
+        }
+
+        /* Mood Emoji Button Styling */
+        .mood-emoji-btn {
+            @apply p-4 rounded-full text-4xl cursor-pointer transition-all duration-200 ease-in-out transform hover:scale-110;
+            border: 2px solid transparent;
+        }
+
+        .mood-emoji-btn.selected {
+            @apply ring-4 ring-offset-2;
+        }
+
+        /* Specific ring colors for selected emojis */
+        .mood-emoji-btn[data-mood-value="5"].selected { @apply ring-green-500; } /* Happy */
+        .mood-emoji-btn[data-mood-value="4"].selected { @apply ring-green-600; } /* Content */
+        .mood-emoji-btn[data-mood-value="3"].selected { @apply ring-gray-400; } /* Neutral */
+        .mood-emoji-btn[data-mood-value="2"].selected { @apply ring-red-500; } /* Sad */
+        .mood-emoji-btn[data-mood-value="1"].selected { @apply ring-red-600; } /* Angry */
+        .mood-emoji-btn[data-mood-value="0"].selected { @apply ring-orange-500; } /* Overwhelmed */
+
+
+        /* Calendar Grid */
+        .calendar-grid {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 4px;
+        }
+
+        .calendar-day-cell {
+            @apply p-2 rounded-lg text-center flex flex-col justify-between items-center relative overflow-hidden;
+            min-height: 80px; /* Ensure cells are large enough */
+            transition: background-color 0.2s ease;
+            cursor: pointer;
+        }
+
+        .calendar-day-cell:hover {
+            @apply ring-2 ring-blue-400;
+        }
+
+        /* Mood Colors for Calendar Cells */
+        .mood-bg-5 { background-color: var(--color-happy); }
+        .mood-bg-4 { background-color: var(--color-content); }
+        .mood-bg-3 { background-color: var(--color-neutral); }
+        .mood-bg-2 { background-color: var(--color-sad); }
+        .mood-bg-1 { background-color: var(--color-angry); }
+        .mood-bg-0 { background-color: var(--color-overwhelmed); }
+        .mood-bg-empty { background-color: var(--color-default-bg); } /* Default for empty days */
+        .dark-mode .mood-bg-empty { background-color: #374151; } /* gray-700 in dark mode */
+
+
+        /* Tooltip styles */
+        .tooltip {
+            @apply absolute z-10 px-3 py-2 text-sm font-medium text-white bg-gray-800 rounded-lg shadow-sm opacity-0 invisible transition-opacity duration-300 ease-in-out;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            white-space: nowrap;
+            pointer-events: none; /* Allows clicks to pass through */
+        }
+
+        .calendar-day-cell:hover .tooltip {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        /* Modal styling */
+        .modal {
+            @apply fixed inset-0 bg-black bg-opacity-50 z-50; /* Removed flex centering from here */
+            display: none; /* Hidden by default */
+        }
+
+        /* Modal content will be absolutely centered within the modal overlay */
+        .modal-content {
+            @apply bg-white dark:bg-gray-800 p-6 rounded-lg shadow-xl max-w-lg w-full mx-4 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2; /* Added absolute centering classes */
+        }
+
+        /* Hide scrollbar for reflection entries */
+        .reflection-entries::-webkit-scrollbar {
+            display: none;
+        }
+        .reflection-entries {
+            -ms-overflow-style: none;  /* IE and Edge */
+            scrollbar-width: none;  /* Firefox */
+        }
+
+        /* Custom button styles */
+        .btn-primary {
+            @apply px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors duration-200;
+        }
+        .btn-secondary {
+            @apply px-4 py-2 bg-gray-300 text-gray-800 rounded-md hover:bg-gray-400 transition-colors duration-200 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600;
+        }
+        .btn-danger {
+            @apply px-4 py-2 bg-red-500 text-white rounded-md hover:bg-red-600 transition-colors duration-200;
+        }
+        .btn-icon {
+            @apply p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors duration-200;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-900 min-h-screen flex flex-col">
+
+    <!-- Main Application Container -->
+    <div class="container mx-auto p-4 flex-grow">
+        <h1 class="text-4xl font-bold text-center mb-8 text-blue-600 dark:text-blue-400">📔 Mood Diary</h1>
+
+        <!-- Navigation Tabs -->
+        <nav class="mb-8">
+            <ul class="flex justify-center space-x-4">
+                <li><button id="nav-daily-entry" class="tab-btn px-6 py-3 rounded-t-lg bg-blue-500 text-white font-semibold shadow-md hover:bg-blue-600 transition-colors duration-200">Daily Entry</button></li>
+                <li><button id="nav-calendar" class="tab-btn px-6 py-3 rounded-t-lg bg-gray-200 text-gray-700 font-semibold hover:bg-gray-300 transition-colors duration-200 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600">Calendar</button></li>
+                <li><button id="nav-trends" class="tab-btn px-6 py-3 rounded-t-lg bg-gray-200 text-gray-700 font-semibold hover:bg-gray-300 transition-colors duration-200 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600">Trends</button></li>
+                <li><button id="nav-reflection" class="tab-btn px-6 py-3 rounded-t-lg bg-gray-200 text-gray-700 font-semibold hover:bg-gray-300 transition-colors duration-200 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600">Reflection</button></li>
+                <li><button id="nav-settings" class="tab-btn px-6 py-3 rounded-t-lg bg-gray-200 text-gray-700 font-semibold hover:bg-gray-300 transition-colors duration-200 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600">Settings</button></li>
+            </ul>
+        </nav>
+
+        <!-- Main Content Area - Sections will be toggled -->
+        <div id="app-content" class="bg-white dark:bg-gray-800 p-8 rounded-lg shadow-xl">
+
+            <!-- 1. Daily Mood Entry System -->
+            <section id="daily-entry-section" class="tab-content">
+                <h2 class="text-2xl font-semibold mb-6 text-center">How are you feeling today?</h2>
+                <div class="flex flex-wrap justify-center gap-4 mb-6" id="emoji-selector">
+                    <!-- Emojis will be dynamically generated here -->
+                </div>
+
+                <div class="mb-6">
+                    <label for="mood-note" class="block text-lg font-medium mb-2">Why are you feeling this way?</label>
+                    <textarea id="mood-note" rows="4" class="w-full p-3 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white" placeholder="Write a short description..."></textarea>
+                </div>
+
+                <div class="mb-6 p-4 bg-blue-50 dark:bg-blue-900 rounded-lg border border-blue-200 dark:border-blue-700">
+                    <p class="text-lg font-medium mb-2 text-blue-800 dark:text-blue-200">Daily Reflection Prompt:</p>
+                    <p id="daily-prompt" class="text-blue-700 dark:text-blue-300 italic">Loading prompt...</p>
+                </div>
+
+                <div class="flex justify-center gap-4">
+                    <button id="save-mood-btn" class="btn-primary">Save Mood</button>
+                    <button id="edit-mood-btn" class="btn-secondary hidden">Edit Mood</button>
+                    <button id="delete-mood-btn" class="btn-danger hidden">Delete Entry</button>
+                </div>
+            </section>
+
+            <!-- 2. Mood Calendar Log -->
+            <section id="calendar-section" class="tab-content hidden">
+                <h2 class="text-2xl font-semibold mb-6 text-center">Mood Calendar</h2>
+                <div class="flex justify-between items-center mb-4">
+                    <button id="prev-month-btn" class="btn-secondary">&lt; Prev</button>
+                    <h3 id="current-month-year" class="text-xl font-medium"></h3>
+                    <button id="next-month-btn" class="btn-secondary">Next &gt;</button>
+                </div>
+                <div class="calendar-grid mb-6">
+                    <!-- Weekday headers -->
+                    <div class="text-center font-semibold text-gray-500 dark:text-gray-400">Sun</div>
+                    <div class="text-center font-semibold text-gray-500 dark:text-gray-400">Mon</div>
+                    <div class="text-center font-semibold text-gray-500 dark:text-gray-400">Tue</div>
+                    <div class="text-center font-semibold text-gray-500 dark:text-gray-400">Wed</div>
+                    <div class="text-center font-semibold text-gray-500 dark:text-gray-400">Thu</div>
+                    <div class="text-center font-semibold text-gray-500 dark:text-gray-400">Fri</div>
+                    <div class="text-center font-semibold text-gray-500 dark:text-gray-400">Sat</div>
+                    <!-- Calendar days will be dynamically generated here -->
+                    <div id="calendar-days" class="col-span-7 grid grid-cols-7 gap-1"></div>
+                </div>
+
+                <!-- Color Key/Legend -->
+                <div class="mt-8">
+                    <h3 class="text-lg font-semibold mb-3">Mood Legend:</h3>
+                    <div class="flex flex-wrap gap-4 justify-center">
+                        <div class="flex items-center gap-2">
+                            <span class="w-6 h-6 rounded-full mood-bg-5"></span> <span>😃 Happy (5)</span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <span class="w-6 h-6 rounded-full mood-bg-4"></span> <span>🙂 Content (4)</span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <span class="w-6 h-6 rounded-full mood-bg-3"></span> <span>😐 Neutral (3)</span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <span class="w-6 h-6 rounded-full mood-bg-2"></span> <span>😔 Sad (2)</span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <span class="w-6 h-6 rounded-full mood-bg-1"></span> <span>😡 Angry (1)</span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <span class="w-6 h-6 rounded-full mood-bg-0"></span> <span>😭 Overwhelmed (0)</span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 3. Graphical Mood Trends -->
+            <section id="trends-section" class="tab-content hidden">
+                <h2 class="text-2xl font-semibold mb-6 text-center">Mood Trends Over Time</h2>
+                <div class="flex justify-center gap-4 mb-6">
+                    <button id="trend-7-days-btn" class="btn-secondary">Last 7 Days</button>
+                    <button id="trend-month-btn" class="btn-secondary">Current Month</button>
+                    <button id="trend-all-time-btn" class="btn-secondary">All Time</button>
+                </div>
+                <div class="relative h-80 mb-6">
+                    <canvas id="mood-chart"></canvas>
+                </div>
+                <div class="text-center text-lg font-medium">
+                    Your average mood: <span id="average-mood-summary" class="font-bold"></span>
+                </div>
+            </section>
+
+            <!-- 4. Reflection Mode -->
+            <section id="reflection-section" class="tab-content hidden">
+                <h2 class="text-2xl font-semibold mb-6 text-center">Weekly Reflections</h2>
+                <div id="reflection-entries" class="grid md:grid-cols-2 lg:grid-cols-3 gap-6 max-h-96 overflow-y-auto reflection-entries">
+                    <!-- Reflection entries will be dynamically generated here -->
+                </div>
+                <div class="mt-8 p-4 bg-purple-50 dark:bg-purple-900 rounded-lg border border-purple-200 dark:border-purple-700">
+                    <p class="text-lg font-medium mb-2 text-purple-800 dark:text-purple-200">Reflection Prompt:</p>
+                    <p class="text-purple-700 dark:text-purple-300 italic">"Noticed any patterns this week?"</p>
+                </div>
+            </section>
+
+            <!-- 6. Privacy & Protection (Optional) / 7. Bonus/Enhancement Features -->
+            <section id="settings-section" class="tab-content hidden">
+                <h2 class="text-2xl font-semibold mb-6 text-center">Settings</h2>
+
+                <!-- Dark Mode / Light Mode Toggle -->
+                <div class="mb-6 p-4 bg-gray-50 dark:bg-gray-700 rounded-lg shadow-sm">
+                    <h3 class="text-lg font-medium mb-2">Theme</h3>
+                    <div class="flex items-center justify-between">
+                        <span>Dark Mode</span>
+                        <label class="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" id="dark-mode-toggle" class="sr-only peer">
+                            <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-gray-600 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Data Export/Import -->
+                <div class="mb-6 p-4 bg-gray-50 dark:bg-gray-700 rounded-lg shadow-sm">
+                    <h3 class="text-lg font-medium mb-2">Data Management</h3>
+                    <div class="flex flex-col sm:flex-row gap-4">
+                        <button id="export-data-btn" class="btn-secondary w-full sm:w-auto">Export Data (JSON)</button>
+                        <input type="file" id="import-data-input" accept=".json" class="hidden">
+                        <button id="import-data-btn" class="btn-secondary w-full sm:w-auto">Import Data (JSON)</button>
+                    </div>
+                    <p class="text-sm text-gray-500 dark:text-gray-400 mt-2">Export will download your diary entries as a JSON file. Import will overwrite existing data.</p>
+                </div>
+
+                <!-- Daily Reminder (Optional) -->
+                <div class="mb-6 p-4 bg-gray-50 dark:bg-gray-700 rounded-lg shadow-sm">
+                    <h3 class="text-lg font-medium mb-2">Daily Reminder</h3>
+                    <div class="flex items-center justify-between mb-3">
+                        <span>Enable Reminder</span>
+                        <label class="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" id="reminder-toggle" class="sr-only peer">
+                            <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-gray-600 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
+                        </label>
+                    </div>
+                    <div id="reminder-time-section" class="flex items-center gap-4 hidden">
+                        <label for="reminder-time" class="block text-sm font-medium">Set Time:</label>
+                        <input type="time" id="reminder-time" class="p-2 border border-gray-300 rounded-md dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+                        <button id="set-reminder-btn" class="btn-primary">Set</button>
+                    </div>
+                    <p id="reminder-status" class="text-sm text-gray-600 dark:text-gray-300 mt-2"></p>
+                </div>
+
+                <!-- Privacy Lock (Optional) -->
+                <div class="mb-6 p-4 bg-gray-50 dark:bg-gray-700 rounded-lg shadow-sm">
+                    <h3 class="text-lg font-medium mb-2">Privacy Lock</h3>
+                    <div class="flex items-center justify-between mb-3">
+                        <span>Enable Lock</span>
+                        <label class="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" id="lock-toggle" class="sr-only peer">
+                            <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-gray-600 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
+                        </label>
+                    </div>
+                    <div id="lock-pin-section" class="hidden">
+                        <label for="set-pin" class="block text-sm font-medium mb-1">Set PIN:</label>
+                        <input type="password" id="set-pin" class="w-full p-2 border border-gray-300 rounded-md mb-2 dark:bg-gray-700 dark:border-gray-600 dark:text-white" placeholder="Enter a 4-digit PIN">
+                        <label for="confirm-pin" class="block text-sm font-medium mb-1">Confirm PIN:</label>
+                        <input type="password" id="confirm-pin" class="w-full p-2 border border-gray-300 rounded-md mb-3 dark:bg-gray-700 dark:border-gray-600 dark:text-white" placeholder="Confirm your PIN">
+                        <button id="save-pin-btn" class="btn-primary">Save PIN</button>
+                    </div>
+                    <p id="lock-status" class="text-sm text-gray-600 dark:text-gray-300 mt-2"></p>
+                </div>
+            </section>
+        </div>
+    </div>
+
+    <!-- Confirmation Modal -->
+    <div id="confirmation-modal" class="modal">
+        <div class="modal-content">
+            <h3 class="text-xl font-semibold mb-4" id="modal-title">Confirm Action</h3>
+            <p class="mb-6" id="modal-message">Are you sure you want to proceed?</p>
+            <div class="flex justify-end gap-4">
+                <button id="modal-cancel-btn" class="btn-secondary">Cancel</button>
+                <button id="modal-confirm-btn" class="btn-danger">Confirm</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- PIN Entry Modal -->
+    <div id="pin-entry-modal" class="modal">
+        <div class="modal-content">
+            <h3 class="text-xl font-semibold mb-4">Enter PIN to Unlock</h3>
+            <input type="password" id="unlock-pin-input" class="w-full p-3 border border-gray-300 rounded-md mb-4 dark:bg-gray-700 dark:border-gray-600 dark:text-white" placeholder="Enter your PIN">
+            <p id="pin-error-message" class="text-red-500 text-sm mb-4 hidden"></p>
+            <div class="flex justify-end gap-4">
+                <button id="pin-cancel-btn" class="btn-secondary">Cancel</button>
+                <button id="pin-unlock-btn" class="btn-primary">Unlock</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- Global Variables and Constants ---
+        const MOOD_EMOJIS = [
+            { emoji: '😃', value: 5, name: 'Happy' },
+            { emoji: '🙂', value: 4, name: 'Content' },
+            { emoji: '😐', value: 3, name: 'Neutral' },
+            { emoji: '😔', value: 2, name: 'Sad' },
+            { emoji: '😡', value: 1, name: 'Angry' },
+            { emoji: '😭', value: 0, name: 'Overwhelmed' }
+        ];
+
+        const MOOD_COLORS = {
+            '5': 'var(--color-happy)',
+            '4': 'var(--color-content)',
+            '3': 'var(--color-neutral)',
+            '2': 'var(--color-sad)',
+            '1': 'var(--color-angry)',
+            '0': 'var(--color-overwhelmed)'
+        };
+
+        const MOOD_PROMPTS = [
+            "What energized you today?",
+            "What's one small thing that made you smile?",
+            "What challenged you today, and how did you respond?",
+            "What are you grateful for today?",
+            "What did you learn about yourself today?",
+            "What's something you're looking forward to tomorrow?",
+            "How did you practice self-care today?",
+            "What was the most surprising moment of your day?",
+            "If you could change one thing about today, what would it be?",
+            "What's a feeling you experienced today that you want to explore further?"
+        ];
+
+        let moodEntries = {}; // Stores all mood data: { "YYYY-MM-DD": { emoji, moodValue, note, prompt } }
+        let selectedEmoji = null;
+        let selectedMoodValue = null;
+        let chartInstance = null;
+        let currentCalendarDate = new Date(); // For calendar navigation
+
+        // --- DOM Elements ---
+        const appContent = document.getElementById('app-content');
+        const tabButtons = document.querySelectorAll('.tab-btn');
+        const sections = document.querySelectorAll('.tab-content');
+
+        // Daily Entry Elements
+        const emojiSelector = document.getElementById('emoji-selector');
+        const moodNoteInput = document.getElementById('mood-note');
+        const dailyPromptEl = document.getElementById('daily-prompt');
+        const saveMoodBtn = document.getElementById('save-mood-btn');
+        const editMoodBtn = document.getElementById('edit-mood-btn');
+        const deleteMoodBtn = document.getElementById('delete-mood-btn');
+
+        // Calendar Elements
+        const currentMonthYearEl = document.getElementById('current-month-year');
+        const calendarDaysContainer = document.getElementById('calendar-days');
+        const prevMonthBtn = document.getElementById('prev-month-btn');
+        const nextMonthBtn = document.getElementById('next-month-btn');
+
+        // Trends Elements
+        const moodChartCanvas = document.getElementById('mood-chart');
+        const trend7DaysBtn = document.getElementById('trend-7-days-btn');
+        const trendMonthBtn = document.getElementById('trend-month-btn');
+        const trendAllTimeBtn = document.getElementById('trend-all-time-btn');
+        const averageMoodSummaryEl = document.getElementById('average-mood-summary');
+
+        // Reflection Elements
+        const reflectionEntriesContainer = document.getElementById('reflection-entries');
+
+        // Settings Elements
+        const darkModeToggle = document.getElementById('dark-mode-toggle');
+        const exportDataBtn = document.getElementById('export-data-btn');
+        const importDataInput = document.getElementById('import-data-input');
+        const importDataBtn = document.getElementById('import-data-btn');
+        const reminderToggle = document.getElementById('reminder-toggle');
+        const reminderTimeSection = document.getElementById('reminder-time-section');
+        const reminderTimeInput = document.getElementById('reminder-time');
+        const setReminderBtn = document.getElementById('set-reminder-btn');
+        const reminderStatusEl = document.getElementById('reminder-status');
+        const lockToggle = document.getElementById('lock-toggle');
+        const lockPinSection = document.getElementById('lock-pin-section');
+        const setPinInput = document.getElementById('set-pin');
+        const confirmPinInput = document.getElementById('confirm-pin');
+        const savePinBtn = document.getElementById('save-pin-btn');
+        const lockStatusEl = document.getElementById('lock-status');
+
+        // Modals
+        const confirmationModal = document.getElementById('confirmation-modal');
+        const modalTitle = document.getElementById('modal-title');
+        const modalMessage = document.getElementById('modal-message');
+        const modalCancelBtn = document.getElementById('modal-cancel-btn');
+        const modalConfirmBtn = document.getElementById('modal-confirm-btn');
+
+        const pinEntryModal = document.getElementById('pin-entry-modal');
+        const unlockPinInput = document.getElementById('unlock-pin-input');
+        const pinErrorMessage = document.getElementById('pin-error-message');
+        const pinCancelBtn = document.getElementById('pin-cancel-btn');
+        const pinUnlockBtn = document.getElementById('pin-unlock-btn');
+
+        let confirmActionCallback = null; // Callback for confirmation modal
+        let pinUnlockCallback = null; // Callback for PIN entry modal
+
+        // --- Utility Functions ---
+
+        /**
+         * Formats a Date object into a YYYY-MM-DD string.
+         * @param {Date} date
+         * @returns {string}
+         */
+        function formatDate(date) {
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`;
+        }
+
+        /**
+         * Shows a custom confirmation modal.
+         * @param {string} title
+         * @param {string} message
+         * @returns {Promise<boolean>} Resolves true if confirmed, false if cancelled.
+         */
+        function showConfirmationModal(title, message) {
+            return new Promise((resolve) => {
+                modalTitle.textContent = title;
+                modalMessage.textContent = message;
+                confirmationModal.style.display = 'block'; // Use 'block' as flex is no longer on the modal itself
+
+                const handleConfirm = () => {
+                    confirmationModal.style.display = 'none';
+                    modalConfirmBtn.removeEventListener('click', handleConfirm);
+                    modalCancelBtn.removeEventListener('click', handleCancel);
+                    resolve(true);
+                };
+
+                const handleCancel = () => {
+                    confirmationModal.style.display = 'none';
+                    modalConfirmBtn.removeEventListener('click', handleConfirm);
+                    modalCancelBtn.removeEventListener('click', handleCancel);
+                    resolve(false);
+                };
+
+                modalConfirmBtn.addEventListener('click', handleConfirm);
+                modalCancelBtn.addEventListener('click', handleCancel);
+            });
+        }
+
+        /**
+         * Shows the PIN entry modal.
+         * @returns {Promise<boolean>} Resolves true if PIN is correct, false otherwise.
+         */
+        function showPinEntryModal() {
+            return new Promise((resolve) => {
+                unlockPinInput.value = '';
+                pinErrorMessage.classList.add('hidden');
+                pinEntryModal.style.display = 'block'; // Use 'block' as flex is no longer on the modal itself
+
+                const storedPin = localStorage.getItem('moodDiaryPin');
+
+                const handleUnlock = () => {
+                    const enteredPin = unlockPinInput.value;
+                    if (enteredPin === storedPin) {
+                        pinEntryModal.style.display = 'none';
+                        pinUnlockBtn.removeEventListener('click', handleUnlock);
+                        pinCancelBtn.removeEventListener('click', handleCancel);
+                        resolve(true);
+                    } else {
+                        pinErrorMessage.textContent = 'Incorrect PIN. Try again.';
+                        pinErrorMessage.classList.remove('hidden');
+                    }
+                };
+
+                const handleCancel = () => {
+                    pinEntryModal.style.display = 'none';
+                    pinUnlockBtn.removeEventListener('click', handleUnlock);
+                    pinCancelBtn.removeEventListener('click', handleCancel);
+                    resolve(false);
+                };
+
+                pinUnlockBtn.addEventListener('click', handleUnlock);
+                pinCancelBtn.addEventListener('click', handleCancel);
+            });
+        }
+
+        /**
+         * Checks if the app is currently locked.
+         * @returns {boolean}
+         */
+        function isAppLocked() {
+            return localStorage.getItem('moodDiaryLocked') === 'true';
+        }
+
+        /**
+         * Applies or removes the locked state.
+         * @param {boolean} locked
+         */
+        function applyLockState(locked) {
+            if (locked) {
+                appContent.classList.add('hidden');
+                document.body.classList.add('locked');
+                showPinEntryModal().then(unlocked => {
+                    if (unlocked) {
+                        appContent.classList.remove('hidden');
+                        document.body.classList.remove('locked');
+                    } else {
+                        // If PIN is wrong or cancelled, keep content hidden and redirect to settings or show message
+                        alertUser("Access Denied", "Please enter the correct PIN to access your diary.");
+                        // Optionally, switch to a "locked" view or just keep the content hidden
+                    }
+                });
+            } else {
+                appContent.classList.remove('hidden');
+                document.body.classList.remove('locked');
+            }
+        }
+
+        /**
+         * Displays a simple message to the user (instead of alert).
+         * @param {string} title
+         * @param {string} message
+         */
+        function alertUser(title, message) {
+            // For simplicity, using the confirmation modal as a general alert.
+            // In a real app, you'd have a dedicated alert modal.
+            showConfirmationModal(title, message).then(() => {});
+        }
+
+        // --- Data Storage (localStorage) ---
+
+        /**
+         * Loads mood entries from localStorage.
+         */
+        function loadMoodEntries() {
+            try {
+                const data = localStorage.getItem('moodDiaryEntries');
+                moodEntries = data ? JSON.parse(data) : {};
+            } catch (e) {
+                console.error("Error loading mood entries from localStorage:", e);
+                moodEntries = {};
+            }
+        }
+
+        /**
+         * Saves mood entries to localStorage.
+         */
+        function saveMoodEntries() {
+            try {
+                localStorage.setItem('moodDiaryEntries', JSON.stringify(moodEntries));
+            } catch (e) {
+                console.error("Error saving mood entries to localStorage:", e);
+                alertUser("Save Error", "Could not save your data. Your browser's storage might be full.");
+            }
+        }
+
+        // --- 1. Daily Mood Entry System ---
+
+        /**
+         * Renders the emoji selector buttons.
+         */
+        function renderEmojiSelector() {
+            emojiSelector.innerHTML = '';
+            MOOD_EMOJIS.forEach(mood => {
+                const button = document.createElement('button');
+                button.className = `mood-emoji-btn`;
+                button.dataset.emoji = mood.emoji;
+                button.dataset.moodValue = mood.value;
+                button.innerHTML = mood.emoji;
+                button.title = mood.name; // Add title for accessibility
+                emojiSelector.appendChild(button);
+            });
+        }
+
+        /**
+         * Handles emoji selection.
+         * @param {Event} event
+         */
+        function handleEmojiSelection(event) {
+            const target = event.target.closest('.mood-emoji-btn');
+            if (!target) return;
+
+            // Remove 'selected' class from all emojis
+            document.querySelectorAll('.mood-emoji-btn').forEach(btn => {
+                btn.classList.remove('selected', 'ring-green-500', 'ring-green-600', 'ring-gray-400', 'ring-red-500', 'ring-red-600', 'ring-orange-500');
+            });
+
+            // Add 'selected' class to the clicked emoji
+            target.classList.add('selected');
+            selectedEmoji = target.dataset.emoji;
+            selectedMoodValue = parseInt(target.dataset.moodValue);
+        }
+
+        /**
+         * Selects an emoji button programmatically.
+         * @param {string} emoji The emoji character to select.
+         */
+        function selectEmojiButton(emoji) {
+            document.querySelectorAll('.mood-emoji-btn').forEach(btn => {
+                if (btn.dataset.emoji === emoji) {
+                    btn.classList.add('selected');
+                    selectedEmoji = btn.dataset.emoji;
+                    selectedMoodValue = parseInt(btn.dataset.moodValue);
+                } else {
+                    btn.classList.remove('selected', 'ring-green-500', 'ring-green-600', 'ring-gray-400', 'ring-red-500', 'ring-red-600', 'ring-orange-500');
+                }
+            });
+        }
+
+        /**
+         * Gets the daily journaling prompt based on the date.
+         * @param {Date} date
+         * @returns {string}
+         */
+        function getDailyPrompt(date) {
+            const dayOfYear = Math.floor((date - new Date(date.getFullYear(), 0, 0)) / 1000 / 60 / 60 / 24);
+            return MOOD_PROMPTS[dayOfYear % MOOD_PROMPTS.length];
+        }
+
+        /**
+         * Renders the daily entry section for the current date.
+         */
+        function renderDailyEntrySection() {
+            const today = formatDate(new Date());
+            const entry = moodEntries[today];
+
+            dailyPromptEl.textContent = getDailyPrompt(new Date());
+
+            if (entry) {
+                // Pre-fill if entry exists
+                selectEmojiButton(entry.emoji);
+                moodNoteInput.value = entry.note;
+                saveMoodBtn.classList.add('hidden');
+                editMoodBtn.classList.remove('hidden');
+                deleteMoodBtn.classList.remove('hidden');
+            } else {
+                // Reset for new entry
+                document.querySelectorAll('.mood-emoji-btn').forEach(btn => btn.classList.remove('selected', 'ring-green-500', 'ring-green-600', 'ring-gray-400', 'ring-red-500', 'ring-red-600', 'ring-orange-500'));
+                moodNoteInput.value = '';
+                selectedEmoji = null;
+                selectedMoodValue = null;
+                saveMoodBtn.classList.remove('hidden');
+                editMoodBtn.classList.add('hidden');
+                deleteMoodBtn.classList.add('hidden');
+            }
+        }
+
+        /**
+         * Saves a new mood entry.
+         */
+        async function saveMoodEntry() {
+            if (!selectedEmoji || selectedMoodValue === null) {
+                alertUser("Missing Mood", "Please select an emoji to log your mood.");
+                return;
+            }
+
+            const today = formatDate(new Date());
+            const note = moodNoteInput.value.trim();
+
+            if (moodEntries[today]) {
+                alertUser("Already Logged", "You already have a mood entry for today. Use 'Edit Mood' to change it.");
+                return;
+            }
+
+            moodEntries[today] = {
+                emoji: selectedEmoji,
+                moodValue: selectedMoodValue,
+                note: note,
+                prompt: dailyPromptEl.textContent // Store the prompt shown for that day
+            };
+            saveMoodEntries();
+            alertUser("Mood Saved!", `Your mood for ${today} has been saved.`);
+            renderDailyEntrySection(); // Re-render to show edit/delete buttons
+        }
+
+        /**
+         * Edits an existing mood entry.
+         */
+        async function editMoodEntry() {
+            if (!selectedEmoji || selectedMoodValue === null) {
+                alertUser("Missing Mood", "Please select an emoji to log your mood.");
+                return;
+            }
+
+            const today = formatDate(new Date());
+            const note = moodNoteInput.value.trim();
+
+            if (!moodEntries[today]) {
+                alertUser("No Entry", "No mood entry found for today to edit.");
+                return;
+            }
+
+            const confirmed = await showConfirmationModal("Confirm Edit", "Are you sure you want to update today's mood entry?");
+            if (!confirmed) return;
+
+            moodEntries[today] = {
+                emoji: selectedEmoji,
+                moodValue: selectedMoodValue,
+                note: note,
+                prompt: moodEntries[today].prompt // Keep original prompt
+            };
+            saveMoodEntries();
+            alertUser("Mood Updated!", `Your mood for ${today} has been updated.`);
+        }
+
+        /**
+         * Deletes today's mood entry.
+         */
+        async function deleteMoodEntry() {
+            const today = formatDate(new Date());
+            if (!moodEntries[today]) {
+                alertUser("No Entry", "No mood entry found for today to delete.");
+                return;
+            }
+
+            const confirmed = await showConfirmationModal("Confirm Delete", "Are you sure you want to delete today's mood entry? This cannot be undone.");
+            if (!confirmed) return;
+
+            delete moodEntries[today];
+            saveMoodEntries();
+            alertUser("Entry Deleted!", `Your mood for ${today} has been deleted.`);
+            renderDailyEntrySection(); // Reset the form
+        }
+
+        // --- 2. Mood Calendar Log ---
+
+        /**
+         * Renders the calendar grid for the given month and year.
+         * @param {Date} date - A Date object representing the month to display.
+         */
+        function renderCalendar(date) {
+            calendarDaysContainer.innerHTML = ''; // Clear previous days
+            const year = date.getFullYear();
+            const month = date.getMonth(); // 0-indexed
+
+            currentMonthYearEl.textContent = date.toLocaleString('en-US', { month: 'long', year: 'numeric' });
+
+            // Get the first day of the month and its weekday (0=Sunday, 6=Saturday)
+            const firstDayOfMonth = new Date(year, month, 1);
+            const startingDay = firstDayOfMonth.getDay(); // Day of week for 1st day
+
+            // Get the number of days in the current month
+            const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+            // Add empty cells for days before the 1st of the month
+            for (let i = 0; i < startingDay; i++) {
+                const emptyCell = document.createElement('div');
+                emptyCell.className = 'calendar-day-cell mood-bg-empty';
+                calendarDaysContainer.appendChild(emptyCell);
+            }
+
+            // Add cells for each day of the month
+            for (let day = 1; day <= daysInMonth; day++) {
+                const currentDate = new Date(year, month, day);
+                const formattedDate = formatDate(currentDate);
+                const entry = moodEntries[formattedDate];
+
+                const cell = document.createElement('div');
+                cell.className = `calendar-day-cell relative`;
+                cell.dataset.date = formattedDate;
+
+                // Apply mood color or default background
+                if (entry) {
+                    cell.classList.add(`mood-bg-${entry.moodValue}`);
+                } else {
+                    cell.classList.add('mood-bg-empty');
+                }
+
+                // Day number
+                const dayNum = document.createElement('span');
+                dayNum.className = 'absolute top-2 left-2 text-sm font-semibold';
+                dayNum.textContent = day;
+                cell.appendChild(dayNum);
+
+                // Emoji (if entry exists)
+                if (entry) {
+                    const emojiEl = document.createElement('span');
+                    emojiEl.className = 'text-3xl mt-4'; /* Adjusted margin-top for better spacing */
+                    emojiEl.textContent = entry.emoji;
+                    cell.appendChild(emojiEl);
+
+                    // Tooltip
+                    const tooltip = document.createElement('div');
+                    tooltip.className = 'tooltip';
+                    tooltip.innerHTML = `${entry.emoji} ${MOOD_EMOJIS.find(e => e.emoji === entry.emoji)?.name || ''}<br>${entry.note}`;
+                    cell.appendChild(tooltip);
+                }
+
+                // Add click listener to edit/view entry
+                cell.addEventListener('click', () => {
+                    if (entry) {
+                        alertUser(`Mood for ${formattedDate}`, `${entry.emoji} ${MOOD_EMOJIS.find(e => e.emoji === entry.emoji)?.name || ''}\nNote: ${entry.note}`);
+                        // For a more advanced edit, you could navigate to daily entry and pre-fill
+                    } else {
+                        alertUser("No Entry", `No mood entry for ${formattedDate}.`);
+                    }
+                });
+
+                calendarDaysContainer.appendChild(cell);
+            }
+        }
+
+        /**
+         * Navigates the calendar to the previous month.
+         */
+        function showPreviousMonth() {
+            currentCalendarDate.setMonth(currentCalendarDate.getMonth() - 1);
+            renderCalendar(currentCalendarDate);
+        }
+
+        /**
+         * Navigates the calendar to the next month.
+         */
+        function showNextMonth() {
+            currentCalendarDate.setMonth(currentCalendarDate.getMonth() + 1);
+            renderCalendar(currentCalendarDate);
+        }
+
+        // --- 3. Graphical Mood Trends ---
+
+        /**
+         * Prepares data for the Chart.js graph.
+         * @param {string} viewType - '7days', 'month', 'alltime'
+         * @returns {{labels: string[], data: number[], averageMood: number}}
+         */
+        function prepareChartData(viewType) {
+            const sortedDates = Object.keys(moodEntries).sort();
+            let relevantDates = [];
+            let relevantData = [];
+
+            const today = new Date();
+            let startDate = new Date();
+
+            if (viewType === '7days') {
+                startDate.setDate(today.getDate() - 6); // Last 7 days including today
+            } else if (viewType === 'month') {
+                startDate = new Date(today.getFullYear(), today.getMonth(), 1); // First day of current month
+            } else if (viewType === 'alltime') {
+                if (sortedDates.length > 0) {
+                    startDate = new Date(sortedDates[0]);
+                } else {
+                    return { labels: [], data: [], averageMood: 0 };
+                }
+            }
+
+            // Populate all dates in the range, even if no entry
+            let currentDate = new Date(startDate);
+            while (currentDate <= today) {
+                const formattedDate = formatDate(currentDate);
+                relevantDates.push(formattedDate);
+                relevantData.push(moodEntries[formattedDate] ? moodEntries[formattedDate].moodValue : null); // Use null for missing data
+                currentDate.setDate(currentDate.getDate() + 1);
+            }
+
+            // Filter out future dates if any were accidentally included
+            relevantDates = relevantDates.filter(dateStr => new Date(dateStr) <= today);
+            relevantData = relevantData.slice(0, relevantDates.length);
+
+            // Calculate average mood, ignoring nulls
+            const validMoods = relevantData.filter(val => val !== null);
+            const sumMoods = validMoods.reduce((sum, val) => sum + val, 0);
+            const averageMood = validMoods.length > 0 ? sumMoods / validMoods.length : 0;
+
+            return { labels: relevantDates, data: relevantData, averageMood: averageMood };
+        }
+
+        /**
+         * Updates or creates the Chart.js graph.
+         * @param {string} viewType - '7days', 'month', 'alltime'
+         */
+        function updateMoodChart(viewType) {
+            const { labels, data, averageMood } = prepareChartData(viewType);
+
+            // Determine average mood emoji
+            let averageEmoji = '😐'; // Neutral by default
+            if (averageMood >= 4) averageEmoji = '😃';
+            else if (averageMood >= 3) averageEmoji = '🙂';
+            else if (averageMood >= 2) averageEmoji = '😐';
+            else if (averageMood >= 1) averageEmoji = '😔';
+            else if (averageMood > 0) averageEmoji = '😡';
+            else if (averageMood === 0 && data.length > 0 && data.every(d => d === 0)) averageEmoji = '😭'; // All overwhelmed
+            else averageEmoji = '🤔'; // No data
+
+            averageMoodSummaryEl.textContent = `${averageEmoji} (${averageMood.toFixed(1)})`;
+
+            if (chartInstance) {
+                chartInstance.destroy(); // Destroy previous chart instance
+            }
+
+            if (labels.length === 0) {
+                moodChartCanvas.innerHTML = '<p class="text-center text-gray-500 mt-8">No data available for this period.</p>';
+                return;
+            }
+
+            const ctx = moodChartCanvas.getContext('2d');
+            chartInstance = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Mood Value (0-5)',
+                        data: data,
+                        borderColor: MOOD_COLORS['5'], // Use happy color for line
+                        backgroundColor: 'rgba(59, 130, 246, 0.2)',
+                        tension: 0.3,
+                        fill: true,
+                        pointBackgroundColor: data.map(val => MOOD_COLORS[val]), // Color points based on actual mood value
+                        pointBorderColor: data.map(val => MOOD_COLORS[val]),
+                        pointRadius: 5,
+                        pointHoverRadius: 7,
+                        spanGaps: true // Connect points even if there are nulls
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            max: 5,
+                            ticks: {
+                                stepSize: 1,
+                                callback: function(value) {
+                                    // Map mood values back to emoji names for Y-axis labels
+                                    const mood = MOOD_EMOJIS.find(m => m.value === value);
+                                    return mood ? `${mood.emoji} ${mood.name}` : '';
+                                },
+                                color: document.body.classList.contains('dark-mode') ? 'white' : 'black'
+                            },
+                            grid: {
+                                color: document.body.classList.contains('dark-mode') ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'
+                            }
+                        },
+                        x: {
+                            ticks: {
+                                color: document.body.classList.contains('dark-mode') ? 'white' : 'black'
+                            },
+                            grid: {
+                                color: document.body.classList.contains('dark-mode') ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            display: false
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const value = context.raw;
+                                    const mood = MOOD_EMOJIS.find(m => m.value === value);
+                                    return mood ? `${mood.emoji} ${mood.name} (Value: ${value})` : 'No Entry';
+                                },
+                                title: function(context) {
+                                    return context.label;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // --- 4. Reflection Mode ---
+
+        /**
+         * Renders the last 7 mood entries for reflection.
+         */
+        function renderReflectionMode() {
+            reflectionEntriesContainer.innerHTML = '';
+            const today = new Date();
+            const sortedDates = Object.keys(moodEntries).sort().reverse(); // Newest first
+
+            let count = 0;
+            for (const dateStr of sortedDates) {
+                if (count >= 7) break; // Show only last 7 entries
+
+                const entryDate = new Date(dateStr);
+                // Only include entries up to today
+                if (entryDate > today) continue;
+
+                const entry = moodEntries[dateStr];
+                if (entry) {
+                    const reflectionCard = document.createElement('div');
+                    reflectionCard.className = `p-4 rounded-lg shadow-md ${document.body.classList.contains('dark-mode') ? 'bg-gray-700' : 'bg-gray-50'} border border-gray-200 dark:border-gray-600`;
+                    reflectionCard.innerHTML = `
+                        <h4 class="text-lg font-semibold mb-2">${dateStr}</h4>
+                        <p class="text-3xl mb-2">${entry.emoji} <span class="text-lg">${MOOD_EMOJIS.find(e => e.emoji === entry.emoji)?.name || ''}</span></p>
+                        <p class="text-gray-700 dark:text-gray-300">${entry.note || 'No note provided.'}</p>
+                        <p class="text-sm text-gray-500 dark:text-gray-400 mt-2 italic">Prompt: "${entry.prompt}"</p>
+                    `;
+                    reflectionEntriesContainer.appendChild(reflectionCard);
+                    count++;
+                }
+            }
+
+            if (count === 0) {
+                reflectionEntriesContainer.innerHTML = '<p class="text-center text-gray-500 mt-8 col-span-full">No mood entries yet. Start logging your daily mood!</p>';
+            }
+        }
+
+        // --- 5. Data Storage with localStorage (Implemented in load/saveMoodEntries) ---
+        // Export/Import functionality
+
+        /**
+         * Exports all mood data as a JSON file.
+         */
+        function exportData() {
+            const dataStr = JSON.stringify(moodEntries, null, 2); // Pretty print JSON
+            const blob = new Blob([dataStr], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `mood_diary_backup_${formatDate(new Date())}.json`;
+            document.body.appendChild(a); // Required for Firefox
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            alertUser("Export Complete", "Your mood diary data has been downloaded.");
+        }
+
+        /**
+         * Imports mood data from a JSON file.
+         * @param {Event} event
+         */
+        async function importData(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const confirmed = await showConfirmationModal("Confirm Import", "Importing data will OVERWRITE your current diary entries. Are you sure?");
+            if (!confirmed) {
+                importDataInput.value = ''; // Clear the file input
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    const importedData = JSON.parse(e.target.result);
+                    // Basic validation: check if it looks like mood diary data
+                    if (typeof importedData === 'object' && Object.keys(importedData).every(key => {
+                        const entry = importedData[key];
+                        return typeof entry === 'object' && 'emoji' in entry && 'moodValue' in entry && 'note' in entry;
+                    })) {
+                        moodEntries = importedData;
+                        saveMoodEntries();
+                        alertUser("Import Successful", "Your mood diary data has been imported.");
+                        // Re-render all relevant sections after import
+                        renderDailyEntrySection();
+                        renderCalendar(currentCalendarDate);
+                        updateMoodChart('month');
+                        renderReflectionMode();
+                        importDataInput.value = ''; // Clear the file input
+                    } else {
+                        throw new Error("Invalid JSON structure for Mood Diary data.");
+                    }
+                } catch (error) {
+                    console.error("Error importing data:", error);
+                    alertUser("Import Error", `Failed to import data: ${error.message}. Please ensure it's a valid Mood Diary JSON file.`);
+                    importDataInput.value = ''; // Clear the file input
+                }
+            };
+            reader.readAsText(file);
+        }
+
+        // --- 6. Privacy & Protection (Optional) ---
+
+        /**
+         * Handles the lock toggle.
+         */
+        function handleLockToggle() {
+            const isLocked = lockToggle.checked;
+            localStorage.setItem('moodDiaryLocked', isLocked);
+            lockPinSection.classList.toggle('hidden', !isLocked);
+            lockStatusEl.textContent = isLocked ? 'App is locked. Set a PIN below.' : 'App is unlocked.';
+
+            if (isLocked && !localStorage.getItem('moodDiaryPin')) {
+                alertUser("Set PIN", "Please set a PIN to enable the lock feature.");
+            } else if (isLocked) {
+                applyLockState(true); // Attempt to lock the app
+            } else {
+                applyLockState(false); // Unlock if toggle is off
+            }
+        }
+
+        /**
+         * Saves the user-defined PIN.
+         */
+        async function savePin() {
+            const pin = setPinInput.value;
+            const confirmPin = confirmPinInput.value;
+
+            if (pin.length < 4 || !/^\d+$/.test(pin)) {
+                alertUser("Invalid PIN", "PIN must be at least 4 digits long and contain only numbers.");
+                return;
+            }
+            if (pin !== confirmPin) {
+                alertUser("PIN Mismatch", "PINs do not match. Please re-enter.");
+                return;
+            }
+
+            const confirmed = await showConfirmationModal("Confirm PIN", "Are you sure you want to set this PIN? You will need it to unlock your diary.");
+            if (!confirmed) return;
+
+            localStorage.setItem('moodDiaryPin', pin);
+            alertUser("PIN Set", "Your PIN has been successfully set!");
+            lockStatusEl.textContent = 'App is locked. PIN set.';
+            setPinInput.value = '';
+            confirmPinInput.value = '';
+        }
+
+        // --- 7. Bonus/Enhancement Features ---
+
+        /**
+         * Toggles dark mode.
+         */
+        function toggleDarkMode() {
+            document.body.classList.toggle('dark-mode');
+            const isDarkMode = document.body.classList.contains('dark-mode');
+            localStorage.setItem('theme', isDarkMode ? 'dark' : 'light');
+            // Re-render chart to update colors
+            if (chartInstance) {
+                // Determine current view type to re-render correctly
+                let currentViewType = 'month'; // Default
+                const activeTrendButton = document.querySelector('#trends-section .btn-secondary.bg-blue-500');
+                if (activeTrendButton) {
+                    if (activeTrendButton.id === 'trend-7-days-btn') currentViewType = '7days';
+                    else if (activeTrendButton.id === 'trend-all-time-btn') currentViewType = 'alltime';
+                }
+                updateMoodChart(currentViewType);
+            }
+            // Re-render calendar to update empty cell background
+            renderCalendar(currentCalendarDate);
+        }
+
+        /**
+         * Initializes dark mode based on localStorage or system preference.
+         */
+        function initDarkMode() {
+            const savedTheme = localStorage.getItem('theme');
+            if (savedTheme === 'dark' || (!savedTheme && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+                document.body.classList.add('dark-mode');
+                darkModeToggle.checked = true;
+            }
+        }
+
+        /**
+         * Requests Notification API permission and sets a daily reminder.
+         */
+        async function setDailyReminder() {
+            if (!("Notification" in window)) {
+                alertUser("Notifications Not Supported", "This browser does not support desktop notifications.");
+                return;
+            }
+
+            if (Notification.permission === "denied") {
+                alertUser("Permission Denied", "Notification permission was denied. Please enable it in your browser settings to receive reminders.");
+                return;
+            }
+
+            const time = reminderTimeInput.value;
+            if (!time) {
+                alertUser("Missing Time", "Please select a time for the reminder.");
+                return;
+            }
+
+            const permission = await Notification.requestPermission();
+            if (permission !== "granted") {
+                alertUser("Permission Not Granted", "Notification permission was not granted. Cannot set reminder.");
+                return;
+            }
+
+            localStorage.setItem('moodDiaryReminderTime', time);
+            localStorage.setItem('moodDiaryReminderEnabled', 'true');
+            reminderStatusEl.textContent = `Reminder set for ${time} daily.`;
+            startDailyReminderCheck(); // Start checking for reminder
+            alertUser("Reminder Set", `You will receive a daily reminder at ${time}.`);
+        }
+
+        /**
+         * Starts a loop to check for daily reminder.
+         */
+        function startDailyReminderCheck() {
+            const reminderEnabled = localStorage.getItem('moodDiaryReminderEnabled') === 'true';
+            const reminderTime = localStorage.getItem('moodDiaryReminderTime');
+
+            if (!reminderEnabled || !reminderTime) {
+                console.log("Daily reminder not enabled or time not set.");
+                return;
+            }
+
+            // Clear any existing reminder interval to prevent duplicates
+            if (window._moodDiaryReminderInterval) {
+                clearInterval(window._moodDiaryReminderInterval);
+            }
+
+            window._moodDiaryReminderInterval = setInterval(() => {
+                const now = new Date();
+                const [hours, minutes] = reminderTime.split(':').map(Number);
+
+                if (now.getHours() === hours && now.getMinutes() === minutes && now.getSeconds() === 0) {
+                    // Prevent multiple notifications within the same minute
+                    if (!localStorage.getItem('lastNotificationDate') || localStorage.getItem('lastNotificationDate') !== formatDate(now)) {
+                        new Notification("Mood Diary Reminder", {
+                            body: "How are you feeling today? Time to log your mood!",
+                            icon: "https://placehold.co/64x64/000000/FFFFFF?text=📔" // Placeholder icon
+                        });
+                        localStorage.setItem('lastNotificationDate', formatDate(now));
+                    }
+                }
+            }, 1000); // Check every second
+            console.log(`Daily reminder check started for ${reminderTime}.`);
+        }
+
+        /**
+         * Toggles the reminder section visibility and status.
+         */
+        function handleReminderToggle() {
+            const isEnabled = reminderToggle.checked;
+            localStorage.setItem('moodDiaryReminderEnabled', isEnabled);
+            reminderTimeSection.classList.toggle('hidden', !isEnabled);
+            reminderStatusEl.textContent = isEnabled ? 'Reminder enabled.' : 'Reminder disabled.';
+
+            if (isEnabled) {
+                startDailyReminderCheck();
+                const savedTime = localStorage.getItem('moodDiaryReminderTime');
+                if (savedTime) {
+                    reminderTimeInput.value = savedTime;
+                    reminderStatusEl.textContent = `Reminder enabled for ${savedTime} daily.`;
+                } else {
+                    reminderStatusEl.textContent = 'Reminder enabled. Please set a time.';
+                }
+            } else {
+                if (window._moodDiaryReminderInterval) {
+                    clearInterval(window._moodDiaryReminderInterval);
+                    window._moodDiaryReminderInterval = null;
+                }
+            }
+        }
+
+        // --- PWA-Ready (Explanation) ---
+        // For PWA, you would typically have two additional files:
+        // 1. `manifest.json`: Describes your app (name, icons, start_url, display mode).
+        // 2. `service-worker.js`: Handles caching assets for offline use.
+        // These cannot be embedded directly in the HTML, but here's how you'd register them:
+
+        function registerServiceWorker() {
+            if ('serviceWorker' in navigator) {
+                window.addEventListener('load', () => {
+                    // IMPORTANT: For this to work, 'service-worker.js' must be in the same directory
+                    // and served from a valid HTTP/HTTPS server. It will not work directly from a
+                    // 'file://' URL or certain sandboxed environments.
+                    navigator.serviceWorker.register('/service-worker.js')
+                        .then(registration => {
+                            console.log('Service Worker registered with scope:', registration.scope);
+                        })
+                        .catch(error => {
+                            console.error('Service Worker registration failed:', error);
+                        });
+                });
+            }
+        }
+        // You would also link the manifest in your HTML head:
+        // <link rel="manifest" href="/manifest.json">
+        // For this single-file immersive, I'll just provide the JS logic.
+        // The user would need to create `manifest.json` and `service-worker.js` files manually.
+
+
+        // --- UI Navigation ---
+
+        /**
+         * Activates a specific tab and shows its content section.
+         * @param {string} tabId - The ID of the tab button (e.g., 'nav-daily-entry').
+         */
+        function activateTab(tabId) {
+            // Deactivate all tabs and hide all sections
+            tabButtons.forEach(btn => {
+                btn.classList.remove('bg-blue-500', 'text-white');
+                btn.classList.add('bg-gray-200', 'text-gray-700', 'hover:bg-gray-300', 'dark:bg-gray-700', 'dark:text-gray-200', 'dark:hover:bg-gray-600');
+            });
+            sections.forEach(sec => sec.classList.add('hidden'));
+
+            // Activate the selected tab and show its section
+            const selectedTabBtn = document.getElementById(tabId);
+            selectedTabBtn.classList.remove('bg-gray-200', 'text-gray-700', 'hover:bg-gray-300', 'dark:bg-gray-700', 'dark:text-gray-200', 'dark:hover:bg-gray-600');
+            selectedTabBtn.classList.add('bg-blue-500', 'text-white');
+
+            const sectionId = tabId.replace('nav-', '') + '-section';
+            // Ensure the element exists before trying to access its classList
+            const targetSection = document.getElementById(sectionId);
+            if (targetSection) {
+                targetSection.classList.remove('hidden');
+            } else {
+                console.error(`Section with ID ${sectionId} not found.`);
+            }
+
+
+            // Re-render content specific to the activated tab
+            if (sectionId === 'daily-entry-section') {
+                renderDailyEntrySection();
+            } else if (sectionId === 'calendar-section') {
+                renderCalendar(currentCalendarDate);
+            } else if (sectionId === 'trends-section') {
+                updateMoodChart('month'); // Default to current month view
+            } else if (sectionId === 'reflection-section') {
+                renderReflectionMode();
+            }
+        }
+
+        // --- Event Listeners ---
+
+        document.addEventListener('DOMContentLoaded', () => {
+            loadMoodEntries();
+            initDarkMode();
+            renderEmojiSelector(); // Initialize emoji buttons
+            activateTab('nav-daily-entry'); // Default to daily entry view
+
+            // Check for lock state on load
+            if (isAppLocked()) {
+                lockToggle.checked = true;
+                lockPinSection.classList.remove('hidden');
+                lockStatusEl.textContent = 'App is locked. Enter PIN to access.';
+                applyLockState(true);
+            } else {
+                lockToggle.checked = false;
+                lockPinSection.classList.add('hidden');
+                lockStatusEl.textContent = 'App is unlocked.';
+            }
+
+            // Initialize reminder state
+            const reminderEnabled = localStorage.getItem('moodDiaryReminderEnabled') === 'true';
+            reminderToggle.checked = reminderEnabled;
+            reminderTimeSection.classList.toggle('hidden', !reminderEnabled);
+            if (reminderEnabled) {
+                const savedTime = localStorage.getItem('moodDiaryReminderTime');
+                if (savedTime) {
+                    reminderTimeInput.value = savedTime;
+                    reminderStatusEl.textContent = `Reminder enabled for ${savedTime} daily.`;
+                } else {
+                    reminderStatusEl.textContent = 'Reminder enabled. Please set a time.';
+                }
+                startDailyReminderCheck();
+            } else {
+                reminderStatusEl.textContent = 'Reminder disabled.';
+            }
+
+            // Tab Navigation
+            tabButtons.forEach(button => {
+                button.addEventListener('click', () => activateTab(button.id));
+            });
+
+            // Daily Entry Listeners
+            emojiSelector.addEventListener('click', handleEmojiSelection);
+            saveMoodBtn.addEventListener('click', saveMoodEntry);
+            editMoodBtn.addEventListener('click', editMoodEntry);
+            deleteMoodBtn.addEventListener('click', deleteMoodEntry);
+
+            // Calendar Listeners
+            prevMonthBtn.addEventListener('click', showPreviousMonth);
+            nextMonthBtn.addEventListener('click', showNextMonth);
+
+            // Trends Listeners
+            trend7DaysBtn.addEventListener('click', () => updateMoodChart('7days'));
+            trendMonthBtn.addEventListener('click', () => updateMoodChart('month'));
+            trendAllTimeBtn.addEventListener('click', () => updateMoodChart('alltime'));
+
+            // Settings Listeners
+            darkModeToggle.addEventListener('change', toggleDarkMode);
+            exportDataBtn.addEventListener('click', exportData);
+            importDataBtn.addEventListener('click', () => importDataInput.click()); // Trigger hidden file input
+            importDataInput.addEventListener('change', importData);
+            reminderToggle.addEventListener('change', handleReminderToggle);
+            setReminderBtn.addEventListener('click', setDailyReminder);
+            lockToggle.addEventListener('change', handleLockToggle);
+            savePinBtn.addEventListener('click', savePin);
+
+            // Removed the direct call to registerServiceWorker() here.
+            // PWA functionality requires separate manifest.json and service-worker.js files
+            // and hosting on a web server (not directly from file://).
+            // registerServiceWorker(); // This line was removed.
+        });
+
+    </script>
+</body>
+</html>
